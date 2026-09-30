@@ -1,0 +1,31 @@
+services:
+  metaphactory:
+    # metaphactory overwrites here
+    ports:
+      - "10214:8080"
+    #  - "10213:8443"
+    #mem_limit: 2g
+    #mem_reservation: 2g
+    #environment:
+    # Uncomment the following line(s) to activate bundled apps
+    # - MP_APP_AWS_SERVICES=/bundled/apps/aws-services
+    # - MP_APP_EIA=/bundled/apps/enterprise-information-architecture
+    #extra_hosts:
+    #  - "hostmachine:172.17.0.1"
+
+  destination-tutorial-db:
+    image: ontopicvkg/destination-tutorial-db
+    shm_size: 1g
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres2
+    networks:
+      - databases
+
+  ontopic-server:
+    networks:
+      - databases
+
+networks:
+  databases:

@@ -1,0 +1,60 @@
+services:
+  graphdb:
+
+    # Uncomment to enable direct access to the GraphDB Workbench 
+    # (at http://localhost:7200) available.
+    #ports:
+    #  - "7200:7200"
+
+    # Uncomment to limit the amount of memory available to the GraphDB container
+    # mem_limit: 2g
+    # mem_reservation: 1g
+    
+    volumes:
+       # By default GraphDB will store all its data in the directory 'graphdb-data' 
+       # in the deployment folder. Modify this mapping if you wish to change this behavior.
+       - ./graphdb-data:/opt/graphdb/home
+
+       # Mount point of the GraphDB license (replace the file with a valid license)
+       - ./database-config/graphdb-config/license/graphdb.license:/etc/graphdb-license
+    
+    # Uncomment to use mount point for GraphDB license (instead of manual upload)
+    #command: -Dgraphdb.home=/opt/graphdb/home -Dgraphdb.license.file=/etc/graphdb-license
+
+  # Automated creation and configuration of a database named 'metaphactory' in GraphDB.
+  # Remove or comment out if you do not want this automatic setup to happen.
+  graphdb-config:
+    container_name: "${COMPOSE_PROJECT_NAME}-graphdb-config"
+    image: "${METAPHACTORY_IMAGE}"
+    volumes:
+      - ./database-config/graphdb-config/:/config
+    depends_on:
+      - graphdb
+    networks:
+      - metaphactory_network
+    entrypoint: /bin/bash
+    command: >
+        -c "
+            while ! curl -sSf http://graphdb:7200/rest/repositories > /dev/null;
+            do 
+                echo \"Waiting for GraphDB...\";
+                sleep 1;
+            done;
+            echo \"GraphDB started\";
+            # adjust repository config to your needs
+            # - graphdb-repository-config.ttl
+            # - graphdb9-repository-config.ttl
+            # - graphdb-with-SHACL-config-example.ttl
+            curl -X POST\\
+              http://graphdb:7200/rest/repositories\\
+              -H 'Content-Type: multipart/form-data'\\
+              -F "config=@/config/graphdb-repository-config.ttl";
+            echo \"Repository configuration applied in GraphDB\";
+        "
+
+  metaphactory:
+    depends_on:
+      - graphdb-config
+      - graphdb
+    volumes: 
+       - ./database-config/graphdb-config/metaphactory.ttl:/runtime-data/config/repositories/default.ttl:rw
