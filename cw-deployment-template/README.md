@@ -13,7 +13,9 @@ This guide consolidates all the setup steps, fixes, and configurations required 
    cp -r ../service-template ./cw-deployment-template
    cd cw-deployment-template
    ```
-2. **Configure `.env`**: Modify the `.env` file to set `COMPOSE_PROJECT_NAME` and append the Ontopic compose files to `COMPOSE_FILE` (before the trailing `docker-compose.overwrite.yml`).
+2. **Configure `.env`**: Modify the `.env` file to set `COMPOSE_PROJECT_NAME` and append the Ontopic compose files to `COMPOSE_FILE` (before the trailing `docker-compose.overwrite.yml`). 
+   * **Note 1:** Ensure your `COMPOSE_FILE` uses **relative paths** (e.g., `../ontopic/docker-compose.yml`) rather than absolute paths, otherwise the stack will fail to boot on other team members' machines.
+   * **Note 2:** Ontopic and Metaphactory are designed as a single, unified stack sharing the same networks. **Do not** attempt to start them separately (e.g. by `cd`-ing into the `ontopic` folder). They must always be started together from this deployment folder.
 
 ## 2. Ontopic Module Preparation
 
@@ -61,8 +63,14 @@ By default, Metaphactory's `default.ttl` repository configuration might be misco
 ### Authentication and Update Endpoint
 To allow Metaphactory to write to Fuseki (e.g., when uploading an ontology in the UI), it requires an explicit `config:sparql.updateEndpoint` and proper Basic Auth configuration. 
 
-Modify `default.ttl` (usually located inside `/runtime-data/config/repositories/default.ttl` inside the container) to use `metaphactory:SPARQLBasicAuthRepository`:
+**Note for Team Members:** The `default.ttl` file being read by the system lives **inside the running container** at `/runtime-data/config/repositories/default.ttl`. To safely edit it, use Docker to copy it out and back in:
 
+```bash
+# 1. Copy it out to your host (replace container name if needed)
+docker cp cw-deployment-1-metaphactory:/runtime-data/config/repositories/default.ttl ./default.ttl
+
+# 2. Modify it locally to use SPARQLBasicAuthRepository and add the updateEndpoint:
+```
 ```turtle
 config:rep.impl [
       config:rep.type "metaphactory:SPARQLBasicAuthRepository";
@@ -73,7 +81,11 @@ config:rep.impl [
       mph:quadMode true
 ]
 ```
-Restart the `metaphactory` container from your host machine after modifying this (`docker compose restart metaphactory`).
+```bash
+# 3. Copy it back and restart the container
+docker cp ./default.ttl cw-deployment-1-metaphactory:/runtime-data/config/repositories/default.ttl
+docker restart cw-deployment-1-metaphactory
+```
 
 ## 4. Starting the Stack
 
@@ -89,19 +101,28 @@ Access Metaphactory at `http://localhost:10214`.
 
 ## 5. Independent Setup: Jena Fuseki Configuration
 
-**Important Note:** The Jena Fuseki database runs **independently** from this Docker Compose stack (typically running directly on the host machine or in a separate Docker container on port `3030`).
+**Important Note:** The Jena Fuseki database runs **independently** from this Docker Compose stack. It runs directly on the host machine in a separate Docker container on port `3030`.
+
+### Starting Fuseki and Creating the Database
+
+To start Jena Fuseki instance, run the following command on host machine:
+```bash
+docker run -d --name jena-fuseki -p 3030:3030 stain/jena-fuseki
+```
+
+Once the container is up and running, create the database. Open the Fuseki web interface at `http://localhost:3030` and create a **permanent TDB2 database** named `process-graph`. This step creates the dataset configuration file that we will modify below.
 
 ### Fixing Ontology Visibility (Named Graphs vs Default Graph)
 
 When ontologies are uploaded via Metaphactory, they are stored in **Named Graphs** in Fuseki. However, Metaphactory's Ontology Catalog uses standard SPARQL queries (which only search the **Default Graph**) to discover them. This results in the UI showing "0 ontologies" despite successful uploads.
 
-To fix this, you must enable **Union Default Graph** in your independent Jena Fuseki container.
+To fix this, you must enable **Union Default Graph** in Jena Fuseki container.
 
-**Location**: Run these commands on your host machine to modify the independent Fuseki container (assumed name: `hopeful_payne` or `jena-fuseki`).
+**Location**: Run these commands on your host machine to modify the Fuseki container.
 
-1. Copy out the dataset configuration file from your running Fuseki container to your host machine:
+1. Copy out the dataset configuration file from your running Fuseki container to your host machine (assuming the container name is `jena-fuseki`):
    ```bash
-   docker cp hopeful_payne:/fuseki/configuration/process-graph.ttl ./process-graph.ttl
+   docker cp jena-fuseki:/fuseki/configuration/process-graph.ttl ./process-graph.ttl
    ```
 2. Edit `process-graph.ttl` on your host machine to add `tdb2:unionDefaultGraph true ;` inside the `:tdb_dataset_readwrite` block:
    ```turtle
@@ -112,8 +133,8 @@ To fix this, you must enable **Union Default Graph** in your independent Jena Fu
    ```
 3. Copy the modified file back to the Fuseki container and restart it:
    ```bash
-   docker cp ./process-graph.ttl hopeful_payne:/fuseki/configuration/process-graph.ttl
-   docker restart hopeful_payne
+   docker cp ./process-graph.ttl jena-fuseki:/fuseki/configuration/process-graph.ttl
+   docker restart jena-fuseki
    ```
 This setting forces Fuseki to treat the union of all named graphs as the default graph, making all uploaded ontologies instantly visible in the Metaphactory UI.
 
