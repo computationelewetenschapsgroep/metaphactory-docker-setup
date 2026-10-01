@@ -13,19 +13,19 @@ services:
     #extra_hosts:
     #  - "hostmachine:172.17.0.1"
 
-  destination-tutorial-db:
-    image: ontopicvkg/destination-tutorial-db
-    shm_size: 1g
-    restart: unless-stopped
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres2
-    networks:
-      - databases
+  # destination-tutorial-db:
+  #   image: ontopicvkg/destination-tutorial-db
+  #   shm_size: 1g
+  #   restart: unless-stopped
+  #   environment:
+  #     - POSTGRES_USER=postgres
+  #     - POSTGRES_PASSWORD=postgres2
+  #   networks:
+  #     - databases
 
-  ontopic-server:
-    networks:
-      - databases
+  # ontopic-server:
+  #   networks:
+  #     - databases
 
 networks:
   databases:

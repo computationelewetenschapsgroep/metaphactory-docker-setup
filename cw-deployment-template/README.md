@@ -17,14 +17,20 @@ This guide consolidates all the setup steps, fixes, and configurations required 
    * **Note 1:** Ensure your `COMPOSE_FILE` uses **relative paths** (e.g., `../ontopic/docker-compose.yml`) rather than absolute paths, otherwise the stack will fail to boot on other team members' machines.
    * **Note 2:** Ontopic and Metaphactory are designed as a single, unified stack sharing the same networks. **Do not** attempt to start them separately (e.g. by `cd`-ing into the `ontopic` folder). They must always be started together from this deployment folder.
 
-## 2. Ontopic Module Preparation
+## 2. Install & Run  postgres db
+
+      ```brew install postgresql@18```
+
+      ``` '/usr/local/Cellar/postgresql@18/18.6/bin/pg_ctl' -D '/usr/local/var/postgresql@18' -l logfile start```
+
+## 3. Ontopic Module Preparation
 
 **Location**: Run these commands on your host machine inside the `cw-deployment-template` directory.
 
 To successfully boot the Ontopic mapping/virtualization containers, several prerequisites must be fulfilled before running docker-compose:
 
 ### Missing Secret Mounts
-Docker Compose fails if bind-mounted files don't exist on the host. Create the required secret placeholders:
+Docker Compose fails if bind-mounted files don't exist on the host. Create the required secret placeholders in `cw-deployment-template`:
 ```bash
 mkdir -p secrets/azure-blob-storage secrets/ai secrets/s3 secrets/store
 touch secrets/azure-blob-storage/account-key \
@@ -44,7 +50,7 @@ printf "secret" > secrets/store/db-password
 ```
 
 ### JDBC Drivers
-The `ontopic-server` requires JDBC drivers mapped into the `./jdbc` volume to connect to databases (including its fallback H2 database):
+The `ontopic-server` requires JDBC drivers mapped into the `./jdbc` (to be created in the `cw-deployment-template` folder) volume to connect to databases (including its fallback H2 database):
 ```bash
 mkdir -p jdbc
 # Download the drivers into the jdbc folder
@@ -52,9 +58,21 @@ wget -P ./jdbc https://repo1.maven.org/maven2/com/h2database/h2/2.2.224/h2-2.2.2
 wget -P ./jdbc https://jdbc.postgresql.org/download/postgresql-42.7.2.jar
 ```
 
-*Note: If containers boot up without joining all networks properly, force recreate them on the host machine using: `docker compose up --force-recreate -d store-server`.*
+## 4. Starting the Stack
 
-## 3. Metaphactory Repository Setup 
+**Location**: Run on your host machine inside the `cw-deployment-template` directory.
+
+Once all configuration steps and prerequisites are met, bring up the stack:
+```bash
+docker compose up -d
+```
+Access Metaphactory at `http://localhost:10214`.
+
+
+*Note: If containers boot up without joining all networks properly, force recreate them on the host machine using: `docker compose up --force-recreate -d store-server`.*
+---
+
+## 5. Metaphactory Repository Setup 
 
 **Location**: Modify the `default.ttl` file on your host machine (if mapped) or inside the Metaphactory container.
 
@@ -87,19 +105,7 @@ docker cp ./default.ttl cw-deployment-1-metaphactory:/runtime-data/config/reposi
 docker restart cw-deployment-1-metaphactory
 ```
 
-## 4. Starting the Stack
-
-**Location**: Run on your host machine inside the `cw-deployment-template` directory.
-
-Once all configuration steps and prerequisites are met, bring up the stack:
-```bash
-docker compose up -d
-```
-Access Metaphactory at `http://localhost:10214`.
-
----
-
-## 5. Independent Setup: Jena Fuseki Configuration
+## 6. Independent Setup: Jena Fuseki Configuration
 
 **Important Note:** The Jena Fuseki database runs **independently** from this Docker Compose stack. It runs directly on the host machine in a separate Docker container on port `3030`.
 
@@ -140,7 +146,7 @@ This setting forces Fuseki to treat the union of all named graphs as the default
 
 ---
 
-## 6. Optional: Tutorial Setup (Destination Database)
+## 7. Optional: Tutorial Setup (Destination Database)
 
 **Location**: Modify `docker-compose.overwrite.yml` inside the `cw-deployment-template` directory on your host machine.
 
